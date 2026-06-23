@@ -84,4 +84,28 @@ public class RideController {
             return ResponseEntity.badRequest().body("Error updating availability: " + e.getMessage());
         }
     }
+
+    // 8. Get driver availability status
+    @GetMapping("/driver/{driverId}/availability")
+    public ResponseEntity<?> getDriverAvailability(@PathVariable Long driverId) {
+        try {
+            boolean available = rideService.getDriverAvailability(driverId);
+            return ResponseEntity.ok(available);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error fetching availability: " + e.getMessage());
+        }
+    }
+
+    // 9. Accept ride endpoint (with race-condition safety)
+    @PutMapping("/{id}/accept")
+    public ResponseEntity<?> acceptRide(
+            @PathVariable Long id,
+            @RequestParam Long driverId) {
+        try {
+            RideResponse response = rideService.acceptRide(id, driverId);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
 }

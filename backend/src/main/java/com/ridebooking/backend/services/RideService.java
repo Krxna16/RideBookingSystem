@@ -7,6 +7,7 @@ import com.ridebooking.backend.entities.Ride;
 import com.ridebooking.backend.repositories.DriverRepository;
 import com.ridebooking.backend.repositories.RideRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -23,7 +24,7 @@ public class RideService {
         this.driverRepository = driverRepository;
     }
 
-    // 1. User Ride Booking & Fare Calculation & Driver Allocation
+    // 1. User Ride Booking & Fare Calculation (No automatic driver allocation)
     public RideResponse requestRide(RideRequest request) {
         // Fare Calculation Logic: Base fare of 50.0 + 15.0 per km/mile
         double fare = 50.0 + (request.getDistance() * 15.0);
@@ -37,18 +38,6 @@ public class RideService {
                 fare,
                 "REQUESTED"
         );
-
-        // Driver Allocation Logic: Find first active and available driver
-        List<Driver> availableDrivers = driverRepository.findByAvailable(true);
-        if (!availableDrivers.isEmpty()) {
-            Driver driver = availableDrivers.get(0);
-            ride.setDriverId(driver.getId());
-            ride.setStatus("ACCEPTED");
-            
-            // Update driver availability to occupied
-            driver.setAvailable(false);
-            driverRepository.save(driver);
-        }
 
         Ride savedRide = rideRepository.save(ride);
         return mapToResponse(savedRide);
@@ -77,7 +66,7 @@ public class RideService {
 
     // 5. Get all pending "REQUESTED" rides that need a driver
     public List<RideResponse> getRequestedRides() {
-        return rideRepository.findByStatus("REQUESTED").stream()
+        return rideRepository.findByStatusAndDriverIdIsNull("REQUESTED").stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -156,6 +145,42 @@ public class RideService {
                 .orElseThrow(() -> new RuntimeException("Driver not found with ID: " + driverId));
         driver.setAvailable(available);
         driverRepository.save(driver);
+    }
+
+    // 8. Get Driver Availability status
+    public boolean getDriverAvailability(Long driverId) {
+        Driver driver = driverRepository.findById(driverId)
+                .orElseThrow(() -> new RuntimeException("Driver not found with ID: " + driverId));
+        return driver.isAvailable();
+    }
+
+    // 9. Manual Ride Acceptance with race-condition safety
+    @Transactional
+    public RideResponse acceptRide(Long rideId, Long driverId) {
+        if (driverId == null) {
+            throw new RuntimeException("Driver ID is required to accept a ride!");
+        }
+
+        Driver driver = driverRepository.findById(driverId)
+                .orElseThrow(() -> new RuntimeException("Driver not found with ID: " + driverId));
+
+        if (!driver.isAvailable()) {
+            throw new RuntimeException("Driver is not available to accept new rides!");
+        }
+
+        // Try to atomically accept the ride (race-condition safe check)
+        int updatedRows = rideRepository.acceptRide(rideId, driverId);
+        if (updatedRows == 0) {
+            throw new RuntimeException("Failed to accept ride: Ride has already been accepted by another driver!");
+        }
+
+        // Set driver status to occupied
+        driver.setAvailable(false);
+        driverRepository.save(driver);
+
+        Ride ride = rideRepository.findById(rideId)
+                .orElseThrow(() -> new RuntimeException("Ride not found with ID: " + rideId));
+        return mapToResponse(ride);
     }
 
     // Helper mapper method

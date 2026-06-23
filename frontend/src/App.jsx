@@ -19,7 +19,18 @@ function App() {
   const [activeRideId, setActiveRideId] = useState(null);
   const [hasActiveRide, setHasActiveRide] = useState(false);
 
-  // Restore authenticated session
+  // Navigation helper to simulate router redirection
+  const navigate = (path) => {
+    if (path === '/login') {
+      setView('login');
+    } else if (path === '/register') {
+      setView('register');
+    } else {
+      setView('dashboard');
+    }
+  };
+
+  // Restore authenticated session & route protection
   useEffect(() => {
     const token = localStorage.getItem('token');
     const role = localStorage.getItem('role');
@@ -38,14 +49,22 @@ function App() {
         driverId: driverId ? parseInt(driverId) : null
       };
       setUser(parsedUser);
-      setView('dashboard');
+      if (view === 'login') {
+        setView('dashboard');
+      }
       
       // If passenger, check for active ride
       if (role === 'ROLE_USER') {
         checkActiveRide(parseInt(userId));
       }
+    } else {
+      // If no valid token exists, redirect to login page
+      if (view !== 'login' && view !== 'register') {
+        setUser(null);
+        setView('login');
+      }
     }
-  }, []);
+  }, [view]);
 
   // Check if passenger already has a trip in progress
   const checkActiveRide = async (userId) => {
@@ -86,10 +105,11 @@ function App() {
 
   const handleLogout = () => {
     localStorage.clear();
+    sessionStorage.clear();
     setUser(null);
     setHasActiveRide(false);
     setActiveRideId(null);
-    setView('login');
+    navigate('/login');
   };
 
   const handleBookingCreated = (rideData) => {

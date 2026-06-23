@@ -62,6 +62,10 @@ export const rideAPI = {
     const response = await apiClient.get(`/rides/history/user/${userId}`);
     return response.data;
   },
+  getRequestedRides: async () => {
+    const response = await apiClient.get('/rides/requested');
+    return response.data;
+  },
   getAssignedRides: async (driverId) => {
     const response = await apiClient.get(`/rides/assigned/driver/${driverId}`);
     return response.data;
@@ -76,6 +80,14 @@ export const rideAPI = {
   },
   toggleDriverAvailability: async (driverId, available) => {
     const response = await apiClient.put(`/rides/driver/${driverId}/availability?available=${available}`);
+    return response.data;
+  },
+  getDriverAvailability: async (driverId) => {
+    const response = await apiClient.get(`/rides/driver/${driverId}/availability`);
+    return response.data;
+  },
+  acceptRide: async (rideId, driverId) => {
+    const response = await apiClient.put(`/rides/${rideId}/accept?driverId=${driverId}`);
     return response.data;
   },
 };

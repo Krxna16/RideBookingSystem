@@ -16,15 +16,24 @@ const DriverDashboard = ({ user, onLogout, onViewHistory }) => {
 
   useEffect(() => {
     if (driverId) {
-      fetchDriverData();
+      fetchDriverData(false);
+
+      // Auto-refresh pool and assignments every 5 seconds
+      const interval = setInterval(() => {
+        fetchDriverData(true);
+      }, 5000);
+
+      return () => clearInterval(interval);
     } else {
       setError('Driver identity could not be verified. Try signing in again.');
     }
   }, [driverId]);
 
-  const fetchDriverData = async () => {
-    setLoading(true);
-    setError('');
+  const fetchDriverData = async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+      setError('');
+    }
     try {
       // 1. Fetch assigned rides
       const assignedData = await rideAPI.getAssignedRides(parseInt(driverId));
@@ -33,11 +42,20 @@ const DriverDashboard = ({ user, onLogout, onViewHistory }) => {
       // 2. Fetch pending "REQUESTED" rides
       const requestedData = await rideAPI.getRequestedRides();
       setRequestedRides(requestedData);
+
+      // 3. Fetch driver availability status from backend database
+      const availability = await rideAPI.getDriverAvailability(parseInt(driverId));
+      setIsAvailable(availability);
+
+      // If we had a dashboard load error previously, clear it
+      setError(prev => prev === 'Failed to refresh dashboard details.' ? '' : prev);
     } catch (err) {
       console.error('Error fetching driver dashboard data:', err);
       setError('Failed to refresh dashboard details.');
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -61,7 +79,7 @@ const DriverDashboard = ({ user, onLogout, onViewHistory }) => {
     setError('');
     setSuccess('');
     try {
-      await rideAPI.updateRideStatus(rideId, 'ACCEPTED', parseInt(driverId));
+      await rideAPI.acceptRide(rideId, parseInt(driverId));
       setSuccess(`Ride #${rideId} successfully accepted!`);
       fetchDriverData();
     } catch (err) {
@@ -158,7 +176,7 @@ const DriverDashboard = ({ user, onLogout, onViewHistory }) => {
         <div>
           <h3 className="mb-4" style={{ fontSize: '1.25rem', color: 'var(--text-bright)', borderBottom: '1px solid var(--card-border)', paddingBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>Active Assignments ({activeTrips.length})</span>
-            <button className="btn btn-secondary" onClick={fetchDriverData} style={{ width: 'auto', padding: '0.25rem 0.75rem', fontSize: '0.8rem' }} disabled={loading}>
+            <button className="btn btn-secondary" onClick={() => fetchDriverData(false)} style={{ width: 'auto', padding: '0.25rem 0.75rem', fontSize: '0.85rem' }} disabled={loading}>
               Refresh
             </button>
           </h3>
